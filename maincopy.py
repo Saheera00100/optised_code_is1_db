@@ -9,8 +9,6 @@ engine = create_engine('sqlite:///inspire2.db')
 Session = sessionmaker(bind=engine)
 session = Session()
 
-FOLDER_PATH = r"c:\Users\LENOVO\OneDrive\Desktop\Decoded_Packets_2023-08-04T080757"
-
 def has_headers(file_path):
     try:
         sample = pd.read_csv(file_path, nrows=1)
@@ -20,11 +18,18 @@ def has_headers(file_path):
         return False
 
 def process_packets(folder_path):
-    for foldername, subfolders, files in os.walk(folder_path):
-        print(f"\nScanning folder: {foldername}")
-        for file in files:
+    foldername = os.path.basename(folder_path)
+    print(f"\nProcessing folder: {foldername}")
+
+    for level in ["Level 0 Packets", "Level 1 Packets"]:
+        level_path = os.path.join(folder_path, level)
+        if not os.path.exists(level_path):
+            print(f"Skipping missing subfolder: {level_path}")
+            continue
+
+        for file in os.listdir(level_path):
             if file.endswith('.csv'):
-                file_path = os.path.join(foldername, file)
+                file_path = os.path.join(level_path, file)
                 print(f"\nFound file: {file}")
 
                 header_exists = has_headers(file_path)
@@ -39,7 +44,7 @@ def process_packets(folder_path):
                     print(f"Error reading {file}: {e}")
                     continue
 
-                # Add packet entry to packets table
+                # Add packet entry if not already added
                 packet = session.query(Packet).filter_by(packet_name=file).first()
                 if not packet:
                     packet = Packet(packet_name=file)
@@ -49,14 +54,21 @@ def process_packets(folder_path):
                 else:
                     print(f"Packet already exists: {file}")
 
-                # You can now process the DataFrame 'df' as needed
-                print(f"DataFrame for {file}:")
-                # print(df.head())
-                df.to_sql(name=file.replace('.csv', ''), con=engine, if_exists='replace', index=False)
-                print(f"DataFrame written to table: {file.replace('.csv', '')}")
+                # Save to table with folder name prefix
+                table_name = f"{foldername}_{file.replace('.csv', '')}".replace(" ", "_")
+                df.to_sql(name=table_name, con=engine, if_exists='replace', index=False)
+                print(f"DataFrame written to table: {table_name}")
 
-    print("\nProcessing complete.")
-def processed_files():
-    return [file[0] for file in processed_files]
+def process_folders(main_folder_path):
+    print(f"\nScanning main folder: {main_folder_path}")
+    for foldername in os.listdir(main_folder_path):
+        full_path = os.path.join(main_folder_path, foldername)
+        if os.path.isdir(full_path) and foldername.startswith("Decoded_Packets"):
+            print(f"\nFound decoded packet folder: {foldername}")
+            process_packets(full_path)
+    print("\nAll folders processed.")
+
 if __name__ == "__main__":
-    process_packets(FOLDER_PATH)
+    # CHANGE THIS to your actual main folder path
+    MAIN_FOLDER_PATH = r"C:\Users\LENOVO\OneDrive\Desktop\IS1 On-orbit Data\Processed data"
+    process_folders(MAIN_FOLDER_PATH)
